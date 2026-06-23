@@ -1,23 +1,38 @@
-# Market Data Service
+# Money Movement Backend
 
-Fetches historical stock price data and computes return analytics using yfinance.
+A layered backend system for processing and tracking financial transactions, built in Python.
 
-## Usage
-python market_data_service.py
+## Layers
 
-## Classes
+### Layer 1 — Market Data Service
+Fetches historical stock price data and computes return analytics.
+- `MarketDataFetcher` — retrieves OHLCV data via yfinance; caches and saves to CSV
+- `Analytics` — log returns, 30-day rolling Sharpe ratio, 95% historical VaR
 
-### MarketDataFetcher
-Fetches and stores historical OHLCV data for one or more tickers.
-- `fetch()` — retrieves price data from yfinance
-- `save_to_csv(output_dir)` — saves each ticker to its own CSV
+### Layer 2 — Account & Ledger Service
+Models accounts, positions, and a cash ledger.
+- `Account` — cash balance, positions, deposit/withdraw/buy/sell with validation
+- `Position` — tracks quantity, average cost, total invested, unrealized P&L
+- `Ledger` — append-only cash ledger; returns immutable copies of history
+- `LedgerEntry` — frozen dataclass recording each cash movement
 
-### Analytics
-Computes return analytics for a single ticker DataFrame.
-- `compute_returns()` — daily log returns
-- `compute_sharpe()` — 30-day rolling annualized Sharpe ratio
-- `compute_var()` — 95% historical Value at Risk
-- `compute_rolling_var()` — 30-day rolling VaR
+### Layer 3 — Transaction Processor
+Processes transactions with lifecycle management and idempotency guarantees.
+- `TransactionProcessor` — orchestrates execution; enforces idempotency via client-generated keys; never re-executes a seen key
+- `Transaction` — carries request fields, lifecycle status, and resulting ledger entry
+- `TransactionStatus` — `PENDING → AUTHORIZED → SETTLED` (or `FAILED` on error)
+
+## Design Notes
+- **Cash ledger:** all ledger entries record cash movements; position state lives in `Account.positions`
+- **Idempotency:** duplicate keys return the cached `Transaction` without re-executing
+- **Atomicity:** account state is never mutated if validation fails; failed attempts are recorded for audit
 
 ## Requirements
-pip install yfinance pandas numpy
+```
+pip install yfinance pandas numpy pytest
+```
+
+## Running Tests
+```
+pytest -v
+```
